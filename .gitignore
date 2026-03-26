@@ -1,0 +1,92 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.prod
+.env.development
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+.venv/
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+.hypothesis/
+.pytest_cache/
+
+# Database
+*.sqlite3
+dev.db
+*.db
+
+# Node/Frontend
+node_modules/
+.pnp/
+.pnp.js
+
+# Next.js
+.next/
+out/
+.turbo/
+.vercel/
+
+# Expo
+.expo/
+web-build/
+.expo-env.d.ts
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.pem
+
+# Uploads (local development)
+backend/uploads/
+uploads/
+
+# npm/yarn debug logs
+npm-debug.log*
+npm-error.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Turbopack cache
+.turbopack/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+expo-env.d.ts

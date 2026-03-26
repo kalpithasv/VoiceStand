@@ -1,0 +1,215 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import { getAccessToken } from "@/lib/token";
+import type { PostCreateResponse, ValidationResult } from "@/lib/types";
+import { getCurrentCoords, updateLocationOnServer } from "@/lib/location";
+import type { FormEvent } from "react";
+
+export default function ComposeClient() {
+  const router = useRouter();
+  const token = useMemo(() => getAccessToken(), []);
+
+  const [text, setText] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [createdPostId, setCreatedPostId] = useState<number | null>(null);
+  const [showMismatchPopup, setShowMismatchPopup] = useState(false);
+
+  useEffect(() => {
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    (async () => {
+      try {
+        const c = await getCurrentCoords();
+        setCoords(c);
+        await updateLocationOnServer(c.lat, c.lon);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!token) return;
+    if (!coords) {
+      setError("Location required");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setValidation(null);
+    setCreatedPostId(null);
+    try {
+      const form = new FormData();
+      form.append("text", text);
+      form.append("lat", String(coords.lat));
+      form.append("lon", String(coords.lon));
+      if (imageFile) form.append("image", imageFile);
+
+      const res = await apiFetch<PostCreateResponse>(
+        "/posts",
+        { method: "POST", body: form },
+        token,
+      );
+
+      if (res.validation) {
+        setValidation(res.validation);
+        if (!res.validation.matches) {
+          // Keep the user on this page so they can clearly see the mismatch warning.
+          // We still create the post, but require explicit navigation to view it.
+          setCreatedPostId(res.post_id);
+          setShowMismatchPopup(true);
+          return;
+        }
+      }
+
+      router.push(`/post/${res.post_id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-50 px-4">
+      <div className="max-w-2xl mx-auto py-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">New complaint</h1>
+            <div className="text-sm text-zinc-600">
+              Location: {coords ? `${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}` : "Locating..."}
+            </div>
+          </div>
+          <button
+            className="px-3 py-1 rounded-full text-sm bg-zinc-200"
+            onClick={() => router.push("/")}
+          >
+            Back
+          </button>
+        </div>
+
+        {error ? <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-800">{error}</div> : null}
+
+        {validation && validation.matches ? (
+          <div className="mb-4 p-3 rounded-xl bg-emerald-50 text-emerald-800">
+            ✓ Content validated: Image and description match ({(validation.confidence * 100).toFixed(0)}% confidence)
+          </div>
+        ) : null}
+
+        {validation && !validation.matches ? (
+          <div className="mb-4 p-3 rounded-xl bg-yellow-50 text-yellow-800 border border-yellow-200">
+            ⚠ Content mismatch detected:
+            <div className="text-sm mt-1">{validation.reasoning}</div>
+            {validation.flags.length > 0 && (
+              <div className="text-xs mt-2">Issues: {validation.flags.join(", ")}</div>
+            )}
+          </div>
+        ) : null}
+        {createdPostId && validation && !validation.matches ? (
+          <div className="mb-4">
+            <button
+              className="w-full px-4 py-2 rounded-full bg-yellow-600 text-white hover:bg-yellow-700"
+              onClick={() => router.push(`/post/${createdPostId}`)}
+              type="button"
+            >
+              View posted item anyway
+            </button>
+          </div>
+        ) : null}
+
+        <form onSubmit={onSubmit} className="bg-white border rounded-2xl p-6">
+          <div className="mb-4">
+            <label className="text-sm text-zinc-700">Complaint text</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full border rounded-xl px-3 py-2 mt-1 min-h-[140px]"
+              required
+            />
+          </div>
+
+          <div className="mb-5">
+            <label className="text-sm text-zinc-700">Picture (optional)</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+              className="w-full mt-2"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full px-4 py-2 rounded-full bg-zinc-900 text-white disabled:opacity-60"
+          >
+            {loading ? "Posting..." : "Post complaint"}
+          </button>
+        </form>
+      </div>
+
+      {showMismatchPopup && validation && !validation.matches ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-[92%] max-w-xl bg-white rounded-2xl border p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-yellow-900">Photo and description do not match</div>
+                <div className="mt-1 text-sm text-yellow-800">
+                  This post is marked as wrong and is hidden from the community feed.
+                </div>
+              </div>
+              <button
+                className="px-3 py-1 rounded-full bg-zinc-200 hover:bg-zinc-300 text-sm"
+                onClick={() => setShowMismatchPopup(false)}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 text-sm text-zinc-800">
+              {validation.reasoning}
+            </div>
+            {validation.flags.length > 0 ? (
+              <div className="mt-2 text-xs text-zinc-600">
+                Issues: {validation.flags.join(", ")}
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex gap-2">
+              {createdPostId ? (
+                <button
+                  className="flex-1 px-4 py-2 rounded-full bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-60"
+                  onClick={() => router.push(`/post/${createdPostId}`)}
+                  type="button"
+                >
+                  View posted item anyway
+                </button>
+              ) : null}
+              <button
+                className="flex-1 px-4 py-2 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-900"
+                onClick={() => setShowMismatchPopup(false)}
+                type="button"
+              >
+                Ok
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
