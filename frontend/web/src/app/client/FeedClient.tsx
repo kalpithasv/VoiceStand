@@ -53,7 +53,12 @@ export default function FeedClient() {
     setLoading(true);
     setError(null);
     try {
-      await updateLocationOnServerOnly();
+      try {
+        await updateLocationOnServerOnly();
+      } catch (e) {
+        // Geolocation permission issues should not block feed rendering.
+        setError(e instanceof Error ? e.message : String(e));
+      }
       await fetchMeAndFeed();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

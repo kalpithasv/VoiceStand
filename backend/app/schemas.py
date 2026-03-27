@@ -1,7 +1,7 @@
 import datetime as dt
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_serializer
 
 
 class SignupRequest(BaseModel):
@@ -81,6 +81,17 @@ class PostOut(BaseModel):
     validation_confidence: float | None = None
     validation_reasoning: str | None = None
     validation_flags: list[str] | None = None
+
+    @field_serializer('created_at', 'expires_at')
+    def serialize_datetime(self, value: dt.datetime) -> str:
+        """Ensure datetimes are always serialized with UTC timezone info."""
+        if value is None:
+            return None
+        # If naive, assume UTC
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=dt.timezone.utc)
+        # Return ISO format with timezone
+        return value.isoformat()
 
 
 class CommentOut(BaseModel):

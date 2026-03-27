@@ -33,7 +33,8 @@ export default function ComposeClient() {
         setCoords(c);
         await updateLocationOnServer(c.lat, c.lon);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(`${msg} You can still browse, but posting requires location.`);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -50,6 +51,7 @@ export default function ComposeClient() {
     setError(null);
     setValidation(null);
     setCreatedPostId(null);
+    setShowMismatchPopup(false);
     try {
       const form = new FormData();
       form.append("text", text);
@@ -63,20 +65,19 @@ export default function ComposeClient() {
         token,
       );
 
-      if (res.validation) {
+      // Check if validation failed (post was flagged)
+      if (res.validation && !res.validation.matches) {
         setValidation(res.validation);
-        if (!res.validation.matches) {
-          // Keep the user on this page so they can clearly see the mismatch warning.
-          // We still create the post, but require explicit navigation to view it.
-          setCreatedPostId(res.post_id);
-          setShowMismatchPopup(true);
-          return;
-        }
+        setCreatedPostId(res.post_id);
+        setShowMismatchPopup(true);
+        setError(null);
+      } else {
+        // Validation passed, post created successfully
+        router.push(`/post/${res.post_id}`);
       }
-
-      router.push(`/post/${res.post_id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -162,48 +163,57 @@ export default function ComposeClient() {
 
       {showMismatchPopup && validation && !validation.matches ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[92%] max-w-xl bg-white rounded-2xl border p-5">
-            <div className="flex items-start justify-between gap-3">
+          <div className="w-[92%] max-w-xl bg-white rounded-2xl border p-6">
+            <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <div className="text-lg font-semibold text-yellow-900">Photo and description do not match</div>
-                <div className="mt-1 text-sm text-yellow-800">
-                  This post is marked as wrong and is hidden from the community feed.
+                <div className="text-xl font-semibold text-red-800">❌ Post Rejected: Irrelevant Content</div>
+                <div className="mt-2 text-sm text-red-700">
+                  Your photo and description do not match. Please ensure they describe the same issue.
                 </div>
               </div>
-              <button
-                className="px-3 py-1 rounded-full bg-zinc-200 hover:bg-zinc-300 text-sm"
-                onClick={() => setShowMismatchPopup(false)}
-                type="button"
-              >
-                Close
-              </button>
             </div>
 
-            <div className="mt-4 text-sm text-zinc-800">
-              {validation.reasoning}
-            </div>
-            {validation.flags.length > 0 ? (
-              <div className="mt-2 text-xs text-zinc-600">
-                Issues: {validation.flags.join(", ")}
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+              <div className="text-sm text-red-800">
+                <div className="font-semibold mb-1">Why was this rejected?</div>
+                <div>{validation.reasoning}</div>
               </div>
-            ) : null}
-
-            <div className="mt-4 flex gap-2">
-              {createdPostId ? (
-                <button
-                  className="flex-1 px-4 py-2 rounded-full bg-yellow-600 hover:bg-yellow-700 text-white disabled:opacity-60"
-                  onClick={() => router.push(`/post/${createdPostId}`)}
-                  type="button"
-                >
-                  View posted item anyway
-                </button>
+              {validation.flags.length > 0 ? (
+                <div className="text-xs text-red-700 mt-2">
+                  Issues: {validation.flags.join(", ")}
+                </div>
               ) : null}
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
+              <div className="text-sm text-blue-800">
+                <strong>What to do:</strong>
+                <ul className="mt-2 list-disc list-inside space-y-1">
+                  <li>Make sure the photo clearly shows the issue you're describing</li>
+                  <li>Write an accurate description of what's in the photo</li>
+                  <li>Avoid describing things that aren't visible in the image</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
               <button
-                className="flex-1 px-4 py-2 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-900"
-                onClick={() => setShowMismatchPopup(false)}
+                className="flex-1 px-4 py-2 rounded-full bg-zinc-600 hover:bg-zinc-700 text-white"
+                onClick={() => {
+                  setShowMismatchPopup(false);
+                  setValidation(null);
+                  setError(null);
+                }}
                 type="button"
               >
-                Ok
+                Edit & Try Again
+              </button>
+              <button
+                className="flex-1 px-4 py-2 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-900"
+                onClick={() => router.push("/")}
+                type="button"
+              >
+                Go Back
               </button>
             </div>
           </div>

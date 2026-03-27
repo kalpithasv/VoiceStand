@@ -36,7 +36,7 @@ app = FastAPI(title="Voicestand API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -141,12 +141,12 @@ def finalize_expired_posts(db: Session) -> None:
 
 
 def apply_hide_rule_on_vote(post: Post) -> None:
-    # hide_immediate: once downvotes cross above upvotes, hide permanently.
+    # Don't hide during voting. Posts stay visible for 5 hours.
+    # Only hide based on final moderation_status (legit/wrong).
     if post.moderation_status != "pending":
         post.hidden = post.moderation_status == "wrong"
         return
-    if post.downvotes_count > post.upvotes_count:
-        post.hidden = True
+    # Keep post visible during 5-hour window regardless of votes
 
 
 def map_post_out(post: Post, reporter_email: str) -> PostOut:
@@ -354,26 +354,45 @@ def create_post(
     current_user.location_updated_at = now
 
     # Validate post content if image is provided.
-    # If it doesn't match, mark it wrong + hidden immediately so it doesn't appear in the community feed.
+    # If it doesn't match, BLOCK the post from being created.
     validation_result: ValidationResult | None = None
     if image_path:
         validation_data = validate_post_content(image_path, text)
         validation_result = ValidationResult(**validation_data)
 
-        # Persist Claude validation info so Profile can show the reason later.
+        # Store validation result regardless of match
         post.validation_matches = validation_result.matches
         post.validation_confidence = validation_result.confidence
         post.validation_reasoning = validation_result.reasoning
         post.validation_flags_json = json.dumps(validation_result.flags)
 
+        # If validation fails, hide the post from feed but still save it
         if not validation_result.matches:
-            post.moderation_status = "wrong"
             post.hidden = True
-            _finalize_reporter_for_wrong(db, current_user, now)
+            post.moderation_status = "wrong"  # Mark as validation failure
+    else:
+        # No image provided, still mark validation fields
+        post.validation_matches = None
+        post.validation_confidence = None
+        post.validation_reasoning = "No image provided"
+        post.validation_flags_json = json.dumps(["no_image"])
 
     db.add(post)
     db.commit()
     db.refresh(post)
+
+    # If post was flagged (validation failed), update user reputation
+    if post.validation_matches is False:
+        current_user.wrong_total += 1
+        current_user.wrong_streak += 1
+        # Suspend if 5 consecutive wrong posts
+        if current_user.wrong_streak >= 5:
+            suspend_until = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=7)
+            current_user.suspended_until = suspend_until
+        # Dismiss if 10 total wrong posts
+        if current_user.wrong_total >= 10:
+            current_user.dismissed = True
+        db.commit()
 
     return PostCreateResponseWithValidation(post_id=post.id, validation=validation_result)
 
@@ -497,6 +516,36 @@ def comment_on_post(
     return map_post_out(post, reporter.email if reporter else "unknown@example.com")
 
 
+@app.get("/debug/posts/{post_id}")
+def debug_post(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Debug endpoint to check post status and timings"""
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    now = dt.datetime.now(dt.timezone.utc)
+    expires_at_aware = _to_utc_aware(post.expires_at)
+    time_remaining = expires_at_aware - now
+    
+    return {
+        "post_id": post.id,
+        "created_at": post.created_at.isoformat() if post.created_at else None,
+        "expires_at": post.expires_at.isoformat() if post.expires_at else None,
+        "current_time": now.isoformat(),
+        "time_remaining_seconds": time_remaining.total_seconds(),
+        "has_expired": time_remaining.total_seconds() <= 0,
+        "upvotes": post.upvotes_count,
+        "downvotes": post.downvotes_count,
+        "hidden": post.hidden,
+        "moderation_status": post.moderation_status,
+        "validation_matches": post.validation_matches,
+    }
+
+
 @app.get("/me/posts", response_model=list[PostOut])
 def my_posts(
     current_user: User = Depends(get_current_user),
@@ -515,3 +564,29 @@ def my_posts(
         out.append(map_post_out(p, current_user.email))
     return out
 
+
+# Debug endpoint (remove in production)
+@app.get("/debug/posts/{post_id}")
+def debug_post(post_id: int, db: Session = Depends(get_db)):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        return {"error": "Not found"}
+    
+    now = dt.datetime.now(dt.timezone.utc)
+    expires_at_aware = _to_utc_aware(post.expires_at)
+    is_expired = expires_at_aware <= now
+    
+    return {
+        "id": post.id,
+        "text": post.text[:50],
+        "hidden": post.hidden,
+        "moderation_status": post.moderation_status,
+        "upvotes": post.upvotes_count,
+        "downvotes": post.downvotes_count,
+        "created_at": post.created_at,
+        "expires_at": post.expires_at,
+        "expires_at_aware": expires_at_aware,
+        "now_utc": now,
+        "is_expired": is_expired,
+        "time_remaining_seconds": (expires_at_aware - now).total_seconds(),
+    }

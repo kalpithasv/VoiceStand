@@ -7,4 +7,5 @@ passlib[bcrypt]==1.7.4
 python-dotenv==1.0.1
 pydantic-settings==2.6.1
 python-multipart==0.0.12
-email-validator>=2.0.0anthropic>=0.28.0
+email-validator>=2.0.0
+anthropic>=0.28.0

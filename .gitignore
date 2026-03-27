@@ -5,6 +5,9 @@
 .env.prod
 .env.development
 
+# Documentation
+*.md
+
 # Python
 __pycache__/
 *.pyc
