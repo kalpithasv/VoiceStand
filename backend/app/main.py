@@ -197,27 +197,33 @@ UPLOAD_DIR = settings.upload_dir
 @app.on_event("startup")
 def on_startup() -> None:
     """Startup handler - graceful DB initialization."""
+    import sys
     try:
-        print("🔍 Starting up VoiceStand...")
-        print(f"📝 Database URL: {settings.database_url[:50]}...")
+        print("🔍 Starting up VoiceStand...", file=sys.stderr)
+        print(f"📝 Database URL: {settings.database_url[:50]}...", file=sys.stderr)
         init_db()
-        print("✅ Database initialized")
+        print("✅ Database initialized", file=sys.stderr)
         
         # Create OpenClaw Agent User for autonomous posting
         try:
+            print("👤 Creating agent user...", file=sys.stderr)
             with SessionLocal() as db_session:
                 agent_email = "agent@openclaw.ai"
                 if not db_session.query(User).filter(User.email == agent_email).first():
                     db_session.add(User(email=agent_email, password_hash=hash_password("auto-agent-123")))
                     db_session.commit()
-                    print("✅ Agent user created")
+                    print("✅ Agent user created", file=sys.stderr)
+                else:
+                    print("✅ Agent user already exists", file=sys.stderr)
         except Exception as e:
-            print(f"⚠️  Agent user creation warning: {e}")
-            print("⚠️  Will be created on first use if needed")
+            print(f"⚠️  Agent user creation warning: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+            print("⚠️  Will be created on first use if needed", file=sys.stderr)
         
-        print("🚀 VoiceStand startup complete!")
+        print("🚀 VoiceStand startup complete!", file=sys.stderr)
     except Exception as e:
-        print(f"❌ CRITICAL STARTUP ERROR: {e}")
+        print(f"❌ CRITICAL STARTUP ERROR: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
         # Don't exit - let FastAPI handle gracefully
