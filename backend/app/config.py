@@ -33,8 +33,8 @@ class Settings(BaseSettings):
     validation_provider: str = "agnes"
     agnes_api_key: str = ""
     # ZenMux expects model IDs in "<provider>/<model_name>" format.
-    agnes_model: str = "openai/gpt-4o-mini"
-    agnes_base_url: str = "https://api.agnesai.io/v1"
+    agnes_model: str = "sapiens-ai/agnes-1.5-pro"
+    agnes_base_url: str = "https://zenmux.ai/api/v1"
     agnes_chat_completions_url: str = ""
     anthropic_api_key: str = ""
 

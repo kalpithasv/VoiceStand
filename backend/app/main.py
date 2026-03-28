@@ -31,6 +31,7 @@ from .schemas import (
 )
 from .validation import validate_post_content
 from .agent import run_openclaw_agent
+from .mem9_service import update_user_streak_memory, flag_user_chronic_offender, record_validation_event
 
 
 app = FastAPI(title="Voicestand API")
@@ -376,8 +377,30 @@ def create_post(
         current_user.coins = max(0, current_user.coins - 10)
         current_user.wrong_total += 1
         current_user.wrong_streak += 1
+        
+        # Track validation failure in Mem9
+        record_validation_event(
+            user_id=current_user.id,
+            post_id=post.id,
+            matches=False,
+            reasoning=validation_result.reasoning
+        )
+        
+        # Update user credibility in Mem9
+        update_user_streak_memory(
+            user_id=current_user.id,
+            wrong_streak=current_user.wrong_streak,
+            wrong_total=current_user.wrong_total,
+            is_wrong=True
+        )
+        
         if current_user.wrong_streak >= 5:
             current_user.suspended_until = now + dt.timedelta(days=7)
+            # Flag as chronic offender in Mem9
+            flag_user_chronic_offender(
+                user_id=current_user.id,
+                reason=f"5 consecutive false posts. Streak: {current_user.wrong_streak}, Total: {current_user.wrong_total}"
+            )
         if current_user.wrong_total >= 10:
             current_user.dismissed = True
 
