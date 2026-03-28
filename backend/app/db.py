@@ -16,6 +16,9 @@ def _create_engine():
     connect_args = {}
     if settings.database_url.startswith("sqlite"):
         connect_args = {"check_same_thread": False}
+    else:
+        # TiDB/MySQL connection timeout
+        connect_args = {"connect_timeout": 10}
 
     return create_engine(settings.database_url, pool_pre_ping=True, connect_args=connect_args)
 
