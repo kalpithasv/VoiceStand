@@ -198,13 +198,20 @@ UPLOAD_DIR = settings.upload_dir
 def on_startup() -> None:
     """Startup handler - graceful DB initialization."""
     import sys
+    db_available = False
+    
     try:
         print("🔍 Starting up VoiceStand...", file=sys.stderr)
         print(f"📝 Database URL: {settings.database_url[:50]}...", file=sys.stderr)
         init_db()
         print("✅ Database initialized", file=sys.stderr)
-        
-        # Create OpenClaw Agent User for autonomous posting
+        db_available = True
+    except Exception as e:
+        print(f"⚠️  Database initialization failed: {e}", file=sys.stderr)
+        print("⚠️  App will start in degraded mode without DB", file=sys.stderr)
+    
+    # Only try to create agent user if DB is available
+    if db_available:
         try:
             print("👤 Creating agent user...", file=sys.stderr)
             with SessionLocal() as db_session:
@@ -217,17 +224,9 @@ def on_startup() -> None:
                     print("✅ Agent user already exists", file=sys.stderr)
         except Exception as e:
             print(f"⚠️  Agent user creation warning: {e}", file=sys.stderr)
-            import traceback
-            traceback.print_exc()
             print("⚠️  Will be created on first use if needed", file=sys.stderr)
-        
-        print("🚀 VoiceStand startup complete!", file=sys.stderr)
-    except Exception as e:
-        print(f"❌ CRITICAL STARTUP ERROR: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
-        # Don't exit - let FastAPI handle gracefully
-        pass
+    
+    print("🚀 VoiceStand startup complete!", file=sys.stderr)
 
     # Minimal SQLite migration for newly added validation columns.
     # (SQLAlchemy `create_all` won't add columns to an existing table.)

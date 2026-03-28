@@ -2,10 +2,10 @@
   "build": {
     "root": "/backend"
   },
-  "serverless": {
-    "function": {
-      "timeoutSeconds": 60,
-      "memory": 1024
+  "deploy": {
+    "backend": {
+      "root": "/backend",
+      "command": "cd /backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8080"
     }
   }
 }
