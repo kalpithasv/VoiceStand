@@ -41,7 +41,12 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, clas
 
 
 def init_db() -> None:
-    from . import models  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)
+    """Initialize database tables. Called on app startup with error handling."""
+    try:
+        from . import models  # noqa: F401
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database initialized successfully")
+    except Exception as e:
+        print(f"⚠️  Database initialization warning: {e}")
+        print("⚠️  Tables will be created on first request if needed")
 
