@@ -9,9 +9,6 @@
 *.md
 *.html
 
-# Deployment
-Procfile
-
 # Python
 __pycache__/
 *.pyc
