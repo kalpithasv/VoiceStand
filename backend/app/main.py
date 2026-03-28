@@ -47,6 +47,13 @@ app.add_middleware(
 bearer = HTTPBearer(auto_error=False)
 
 
+# Health check - no DB dependency
+@app.get("/health")
+def health() -> dict:
+    """Health check endpoint."""
+    return {"status": "ok"}
+
+
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
@@ -190,19 +197,31 @@ UPLOAD_DIR = settings.upload_dir
 @app.on_event("startup")
 def on_startup() -> None:
     """Startup handler - graceful DB initialization."""
-    init_db()
-    
-    # Create OpenClaw Agent User for autonomous posting
     try:
-        with SessionLocal() as db_session:
-            agent_email = "agent@openclaw.ai"
-            if not db_session.query(User).filter(User.email == agent_email).first():
-                db_session.add(User(email=agent_email, password_hash=hash_password("auto-agent-123")))
-                db_session.commit()
-                print("✅ Agent user created")
+        print("🔍 Starting up VoiceStand...")
+        print(f"📝 Database URL: {settings.database_url[:50]}...")
+        init_db()
+        print("✅ Database initialized")
+        
+        # Create OpenClaw Agent User for autonomous posting
+        try:
+            with SessionLocal() as db_session:
+                agent_email = "agent@openclaw.ai"
+                if not db_session.query(User).filter(User.email == agent_email).first():
+                    db_session.add(User(email=agent_email, password_hash=hash_password("auto-agent-123")))
+                    db_session.commit()
+                    print("✅ Agent user created")
+        except Exception as e:
+            print(f"⚠️  Agent user creation warning: {e}")
+            print("⚠️  Will be created on first use if needed")
+        
+        print("🚀 VoiceStand startup complete!")
     except Exception as e:
-        print(f"⚠️  Agent user creation warning: {e}")
-        print("⚠️  Will be created on first use if needed")
+        print(f"❌ CRITICAL STARTUP ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't exit - let FastAPI handle gracefully
+        pass
 
     # Minimal SQLite migration for newly added validation columns.
     # (SQLAlchemy `create_all` won't add columns to an existing table.)
