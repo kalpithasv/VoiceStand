@@ -13,12 +13,13 @@ export default function ProfileClient() {
   const [me, setMe] = useState<UserOut | null>(null);
   const [posts, setPosts] = useState<PostOut[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [wrongModalIndex, setWrongModalIndex] = useState<number | null>(null);
-
-  const wrongHiddenPosts = posts.filter(
-    (p) => p.moderation_status === "wrong" && p.hidden && p.validation_matches === false,
+  const irrelevantPosts = posts.filter(
+    (p) => p.moderation_status === "irrelevant" || (p.moderation_status === "wrong" && p.validation_matches === false),
   );
-  const activeWrongPost = wrongModalIndex !== null ? wrongHiddenPosts[wrongModalIndex] : null;
+  
+  const regularPosts = posts.filter(
+    (p) => !(p.moderation_status === "irrelevant" || (p.moderation_status === "wrong" && p.validation_matches === false)),
+  );
 
   useEffect(() => {
     if (!token) {
@@ -38,14 +39,6 @@ export default function ProfileClient() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    // Compulsory: if you have any wrong/hidden posts, show the explanation modal.
-    if (wrongModalIndex === null && wrongHiddenPosts.length > 0) {
-      setWrongModalIndex(0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wrongHiddenPosts.length]);
 
   return (
     <div className="min-h-screen bg-zinc-50 px-4">
@@ -89,14 +82,15 @@ export default function ProfileClient() {
           </div>
         ) : null}
 
-        <div className="space-y-4">
-          {posts.length === 0 ? <div className="text-zinc-600">No posts yet.</div> : null}
+        <div className="space-y-4 mb-10">
+          <h2 className="text-xl font-bold mb-4">Your Complaints</h2>
+          {regularPosts.length === 0 ? <div className="text-zinc-600">No regular posts yet.</div> : null}
 
-          {posts.map((p) => (
+          {regularPosts.map((p) => (
             <article key={p.id} className="bg-white border rounded-2xl p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm text-zinc-600">{p.locality_code}</div>
-                <div className="text-xs text-zinc-500">
+                <div className={`text-xs font-semibold px-2 py-1 rounded ${p.moderation_status === "pending" ? "bg-zinc-100 text-zinc-500" : p.moderation_status === "legit" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                   {p.moderation_status === "pending" ? "Live" : p.moderation_status === "legit" ? "Verified" : "Wrong"}
                 </div>
               </div>
@@ -114,59 +108,36 @@ export default function ProfileClient() {
             </article>
           ))}
         </div>
-      </div>
 
-      {activeWrongPost ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-[92%] max-w-xl bg-white rounded-2xl border p-5">
-            <div className="text-lg font-semibold text-red-800">Post flagged: photo & description mismatch</div>
-            <div className="mt-2 text-sm text-red-700">
-              This post is removed from the community feed.
-            </div>
+        {irrelevantPosts.length > 0 && (
+          <div className="space-y-4 mt-8 pt-8 border-t border-zinc-200">
+            <h2 className="text-xl font-bold text-red-800">Irrelevant Complaints</h2>
+            <p className="text-sm text-zinc-600 mb-4">These posts were flagged by the AI for a mismatch between the provided image and description.</p>
 
-            {activeWrongPost.image_path ? (
-              <img
-                src={getImageUrl(activeWrongPost.image_path) || ""}
-                alt=""
-                className="mt-3 w-full rounded-xl object-cover max-h-60"
-              />
-            ) : null}
-
-            <div className="mt-3 text-sm text-zinc-900">
-              <div className="font-semibold text-zinc-800">Your description</div>
-              <div className="whitespace-pre-wrap">{activeWrongPost.text}</div>
-            </div>
-
-            <div className="mt-3 text-sm text-zinc-800">
-              <div className="font-semibold text-red-800">Reason</div>
-              <div className="mt-1">{activeWrongPost.validation_reasoning || "Mismatch detected by the validation agent."}</div>
-            </div>
-
-            {activeWrongPost.validation_flags && activeWrongPost.validation_flags.length > 0 ? (
-              <div className="mt-2 text-xs text-zinc-600">
-                Issues: {activeWrongPost.validation_flags.join(", ")}
-              </div>
-            ) : null}
-
-            <div className="mt-4 flex gap-2">
-              <button
-                className="flex-1 px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white"
-                onClick={() => {
-                  if (wrongModalIndex === null) return;
-                  const next = wrongModalIndex + 1;
-                  if (next >= wrongHiddenPosts.length) setWrongModalIndex(null);
-                  else setWrongModalIndex(next);
-                }}
-                type="button"
-              >
-                {wrongModalIndex !== null && wrongModalIndex + 1 < wrongHiddenPosts.length
-                  ? "Next"
-                  : "Ok"}
-              </button>
-            </div>
+            {irrelevantPosts.map((p) => (
+              <article key={p.id} className="bg-red-50 border border-red-200 rounded-2xl p-4 opacity-80">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm text-red-800 font-bold">Penalty Applied</div>
+                  <div className="text-xs text-white font-semibold px-2 py-1 bg-red-600 rounded">
+                    -10 Coins
+                  </div>
+                </div>
+                <p className="mt-2 text-sm text-zinc-800 whitespace-pre-wrap">{p.text}</p>
+                {p.image_path ? <img src={getImageUrl(p.image_path) || ""} alt="" className="mt-3 w-full rounded-xl" /> : null}
+                <div className="mt-4 bg-white/60 p-3 rounded-xl border border-red-100">
+                    <div className="text-xs font-bold text-red-800 mb-1">AI Reasoning</div>
+                    <div className="text-xs text-red-700">{p.validation_reasoning || "Mismatch detected by the validation agent."}</div>
+                    {p.validation_flags && p.validation_flags.length > 0 ? (
+                      <div className="mt-1 text-[10px] text-zinc-600">
+                        Flags: {p.validation_flags.join(", ")}
+                      </div>
+                    ) : null}
+                </div>
+              </article>
+            ))}
           </div>
-        </div>
-      ) : null}
+        )}
+      </div>
     </div>
   );
 }

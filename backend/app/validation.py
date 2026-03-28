@@ -60,10 +60,12 @@ Flags to use:
 
 
 def _validation_error_result(reason: str) -> dict:
+    # For development/testing: allow posts through if API is down
+    # In production, set matches=False to block posts with failed validation
     return {
-        "matches": True,  # Allow post to proceed if validation fails
+        "matches": True,
         "confidence": 0.0,
-        "reasoning": reason,
+        "reasoning": f"Validation skipped: {reason}",
         "flags": ["validation_error"],
     }
 
@@ -144,8 +146,7 @@ def _validate_with_agnes(image_b64: str, media_type: str, description: str) -> d
     payload = {
         "model": settings.agnes_model,
         "temperature": 0,
-        "max_completion_tokens": 500,
-        "response_format": {"type": "json_object"},
+        "max_tokens": 500,
         "messages": [
             {
                 "role": "user",

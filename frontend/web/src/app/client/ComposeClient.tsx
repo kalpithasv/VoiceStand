@@ -68,7 +68,7 @@ export default function ComposeClient() {
       // Check if validation failed (post was flagged)
       if (res.validation && !res.validation.matches) {
         setValidation(res.validation);
-        setCreatedPostId(res.post_id);
+        setCreatedPostId(res.post_id ?? null);
         setShowMismatchPopup(true);
         setError(null);
       } else {
@@ -118,6 +118,7 @@ export default function ComposeClient() {
             )}
           </div>
         ) : null}
+        {/* Hidden posted item block removed to prevent accessing uncreated items */}
         {createdPostId && validation && !validation.matches ? (
           <div className="mb-4">
             <button
@@ -142,10 +143,11 @@ export default function ComposeClient() {
           </div>
 
           <div className="mb-5">
-            <label className="text-sm text-zinc-700">Picture (optional)</label>
+            <label className="text-sm text-zinc-700">Picture (required)</label>
             <input
               type="file"
               accept="image/*"
+              required
               onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
               className="w-full mt-2"
             />
@@ -166,9 +168,12 @@ export default function ComposeClient() {
           <div className="w-[92%] max-w-xl bg-white rounded-2xl border p-6">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <div className="text-xl font-semibold text-red-800">❌ Post Rejected: Irrelevant Content</div>
-                <div className="mt-2 text-sm text-red-700">
-                  Your photo and description do not match. Please ensure they describe the same issue.
+                <div className="text-xl font-semibold text-red-800">❌ Post Flagged</div>
+                <div className="mt-2 text-sm text-red-700 font-semibold">
+                  Your post has been marked as irrelevant to pic and desc. 
+                </div>
+                <div className="mt-1 text-sm text-red-700">
+                  10 coins have been deducted from your profile for this irrelevant post. It will not appear in the community feed but can be viewed in your profile separately.
                 </div>
               </div>
             </div>
@@ -210,10 +215,13 @@ export default function ComposeClient() {
               </button>
               <button
                 className="flex-1 px-4 py-2 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-900"
-                onClick={() => router.push("/")}
+                onClick={() => {
+                  setShowMismatchPopup(false);
+                  router.push("/profile");
+                }}
                 type="button"
               >
-                Go Back
+                Go to Profile
               </button>
             </div>
           </div>

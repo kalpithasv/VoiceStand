@@ -4,7 +4,7 @@ import os
 import uuid
 from typing import Generator
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -30,6 +30,7 @@ from .schemas import (
     ValidationResult,
 )
 from .validation import validate_post_content
+from .agent import run_openclaw_agent
 
 
 app = FastAPI(title="Voicestand API")
@@ -189,6 +190,13 @@ UPLOAD_DIR = settings.upload_dir
 def on_startup() -> None:
     init_db()
 
+    # Create OpenClaw Agent User for autonomous posting
+    with SessionLocal() as db_session:
+        agent_email = "agent@openclaw.ai"
+        if not db_session.query(User).filter(User.email == agent_email).first():
+            db_session.add(User(email=agent_email, password_hash=hash_password("auto-agent-123")))
+            db_session.commit()
+
     # Minimal SQLite migration for newly added validation columns.
     # (SQLAlchemy `create_all` won't add columns to an existing table.)
     if settings.database_url.startswith("sqlite"):
@@ -305,8 +313,9 @@ def feed(
 
 @app.post("/posts", response_model=PostCreateResponseWithValidation)
 def create_post(
+    background_tasks: BackgroundTasks,
     text: str = Form(...),
-    image: UploadFile | None = File(None),
+    image: UploadFile = File(...),
     lat: float | None = Form(None),
     lon: float | None = Form(None),
     current_user: User = Depends(get_current_user),
@@ -326,16 +335,26 @@ def create_post(
 
     locality_code = compute_locality_code(lat, lon)
 
-    image_path = None
-    if image is not None:
-        ext = os.path.splitext(image.filename or "")[1].lower() or ".jpg"
-        filename = f"{uuid.uuid4().hex}{ext}"
-        filepath = os.path.join(UPLOAD_DIR, filename)
-        with open(filepath, "wb") as f:
-            f.write(image.file.read())
-        image_path = f"/uploads/{filename}"
+    # Image is mandatory
+    ext = os.path.splitext(image.filename or "")[1].lower() or ".jpg"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(image.file.read())
+    image_path = f"/uploads/{filename}"
 
     now = dt.datetime.now(dt.timezone.utc)
+    
+    # Ensure we store latest user location
+    current_user.current_lat = lat
+    current_user.current_lon = lon
+    current_user.locality_code = locality_code
+    current_user.location_updated_at = now
+
+    # Validate post content BEFORE creating post record
+    validation_data = validate_post_content(filepath, text)
+    validation_result = ValidationResult(**validation_data)
+
     post = Post(
         reporter_id=current_user.id,
         text=text,
@@ -345,54 +364,29 @@ def create_post(
         locality_code=locality_code,
         created_at=now,
         expires_at=now + dt.timedelta(hours=settings.post_ttl_hours),
+        validation_matches=validation_result.matches,
+        validation_confidence=validation_result.confidence,
+        validation_reasoning=validation_result.reasoning,
+        validation_flags_json=json.dumps(validation_result.flags)
     )
 
-    # Ensure we store latest user location on new posts.
-    current_user.current_lat = lat
-    current_user.current_lon = lon
-    current_user.locality_code = locality_code
-    current_user.location_updated_at = now
-
-    # Validate post content if image is provided.
-    # If it doesn't match, BLOCK the post from being created.
-    validation_result: ValidationResult | None = None
-    if image_path:
-        validation_data = validate_post_content(image_path, text)
-        validation_result = ValidationResult(**validation_data)
-
-        # Store validation result regardless of match
-        post.validation_matches = validation_result.matches
-        post.validation_confidence = validation_result.confidence
-        post.validation_reasoning = validation_result.reasoning
-        post.validation_flags_json = json.dumps(validation_result.flags)
-
-        # If validation fails, hide the post from feed but still save it
-        if not validation_result.matches:
-            post.hidden = True
-            post.moderation_status = "wrong"  # Mark as validation failure
-    else:
-        # No image provided, still mark validation fields
-        post.validation_matches = None
-        post.validation_confidence = None
-        post.validation_reasoning = "No image provided"
-        post.validation_flags_json = json.dumps(["no_image"])
+    if not validation_result.matches:
+        post.hidden = True
+        post.moderation_status = "irrelevant"
+        current_user.coins = max(0, current_user.coins - 10)
+        current_user.wrong_total += 1
+        current_user.wrong_streak += 1
+        if current_user.wrong_streak >= 5:
+            current_user.suspended_until = now + dt.timedelta(days=7)
+        if current_user.wrong_total >= 10:
+            current_user.dismissed = True
 
     db.add(post)
     db.commit()
     db.refresh(post)
 
-    # If post was flagged (validation failed), update user reputation
-    if post.validation_matches is False:
-        current_user.wrong_total += 1
-        current_user.wrong_streak += 1
-        # Suspend if 5 consecutive wrong posts
-        if current_user.wrong_streak >= 5:
-            suspend_until = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=7)
-            current_user.suspended_until = suspend_until
-        # Dismiss if 10 total wrong posts
-        if current_user.wrong_total >= 10:
-            current_user.dismissed = True
-        db.commit()
+    if validation_result.matches:
+        background_tasks.add_task(run_openclaw_agent, post.id)
 
     return PostCreateResponseWithValidation(post_id=post.id, validation=validation_result)
 

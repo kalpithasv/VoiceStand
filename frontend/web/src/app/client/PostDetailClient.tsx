@@ -144,7 +144,7 @@ export default function PostDetailClient({ id }: { id: number }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-semibold">{post.reporter_email}</div>
-                <div className="text-xs text-zinc-500">
+                <div className={`inline-block mt-1 text-xs font-semibold px-2 py-1 rounded ${post.moderation_status === "pending" ? "bg-zinc-100 text-zinc-500" : post.moderation_status === "legit" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                   {post.moderation_status === "pending"
                     ? `Live • ${getTimeRemaining(post.expires_at).hours}h ${getTimeRemaining(post.expires_at).minutes}m left`
                     : post.moderation_status === "legit"

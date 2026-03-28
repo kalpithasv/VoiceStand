@@ -56,7 +56,7 @@ class ValidationResult(BaseModel):
 
 
 class PostCreateResponseWithValidation(BaseModel):
-    post_id: int
+    post_id: int | None = None
     validation: ValidationResult | None = None
 
 

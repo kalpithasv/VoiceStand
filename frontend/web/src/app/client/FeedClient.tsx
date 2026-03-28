@@ -181,7 +181,7 @@ export default function FeedClient() {
                 <div className="flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-semibold">{p.reporter_email}</div>
-                    <div className="text-xs text-zinc-500 text-right">
+                    <div className={`text-xs font-semibold px-2 py-1 rounded text-right ${p.moderation_status === "pending" ? "bg-zinc-100 text-zinc-500" : p.moderation_status === "legit" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                       {p.moderation_status === "pending"
                         ? `Live • ${getTimeRemaining(p.expires_at).hours}h ${getTimeRemaining(p.expires_at).minutes}m left`
                         : p.moderation_status === "legit"
