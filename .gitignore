@@ -26,7 +26,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -61,9 +60,12 @@ out/
 web-build/
 .expo-env.d.ts
 
-# Build outputs
-dist/
-build/
+# Build outputs (from npm, Next.js)
+.next/
+out/
+.turbo/
+.vercel/
+.turbopack/
 coverage/
 
 # IDE
