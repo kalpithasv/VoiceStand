@@ -12,9 +12,9 @@ import urllib.request
 from .config import settings
 
 
-VALIDATION_PROMPT_TEMPLATE = """STRICT IMAGE-DESCRIPTION MATCHING VALIDATION
+VALIDATION_PROMPT_TEMPLATE = """IMAGE-DESCRIPTION MATCHING VALIDATION
 
-Your role: Verify that a social media complaint's image EXACTLY matches its description.
+Your role: Verify that a social media complaint's image reasonably matches its description.
 
 DESCRIPTION TO VALIDATE:
 "{description}"
@@ -22,25 +22,34 @@ DESCRIPTION TO VALIDATE:
 YOUR TASK:
 1. Analyze the image content carefully
 2. Compare against the description
-3. Reject if there's ANY mismatch
+3. Accept if image content aligns with description intent
+4. Reject ONLY if there's a clear/obvious mismatch
 
-REJECTION CRITERIA (If ANY apply, return matches=false):
-✗ Description mentions PEOPLE/CHILDREN/ANIMALS → but image doesn't show them
-✗ Description mentions a SPECIFIC ACTION (hit, fell, accident) → but image doesn't depict it
-✗ Description mentions a SPECIFIC OBJECT (car, bike, person) → but image doesn't show it
-✗ Description is about an INCIDENT/ACCIDENT → but image shows ONLY infrastructure damage
-✗ Image shows one thing, description claims something completely different
+ACCEPTANCE CRITERIA (Return matches=true if ANY apply):
+✓ Image shows people/children and description mentions incident involving them
+✓ Image shows vehicle accident/damage and description mentions accident/injury
+✓ Image shows infrastructure damage and description matches it
+✓ Image shows the general situation described, even if not perfectly precise
+✓ Image quality is poor but content roughly matches description
 
-EXAMPLES OF REJECTION:
-- Description: "child hit on car and fell" + Image: pothole/road → REJECT (no child/accident visible)
-- Description: "drunk driver" + Image: empty parked car → REJECT (no action/state visible)
-- Description: "traffic signal broken" + Image: generic street → REJECT (element not visible)
+REJECTION CRITERIA (Return matches=false ONLY if):
+✗ Description is about PEOPLE/ACCIDENT but image shows ONLY empty road/pothole
+✗ Description is about a CAR/VEHICLE but image shows something completely different (e.g., buildings, trees, water)
+✗ Description claims SPECIFIC INJURY/INCIDENT but image shows NO evidence of that
+✗ Image and description are from COMPLETELY DIFFERENT contexts (unrelated subjects)
 
 EXAMPLES OF ACCEPTANCE:
+- Description: "child accident on road" + Image: child on road with car in background → ACCEPT
 - Description: "pothole on main road" + Image: clear pothole visible → ACCEPT
+- Description: "vehicle accident with injured person" + Image: person on road, car present → ACCEPT
 - Description: "road damage and debris" + Image: damaged asphalt with debris → ACCEPT
 
-CRITICAL: Be very strict. If description mentions people/incidents but image doesn't show them clearly, REJECT.
+EXAMPLES OF REJECTION:
+- Description: "drunk driver causing accident" + Image: empty parked car with no context → REJECT
+- Description: "child injured on road" + Image: empty pothole → REJECT
+- Description: "traffic accident downtown" + Image: random forest/nature scene → REJECT
+
+Be reasonable but fair. Real-world reports may not have perfect photography.
 
 Respond ONLY with JSON (no markdown):
 {{
@@ -52,10 +61,10 @@ Respond ONLY with JSON (no markdown):
 
 Flags to use:
 - "complete_mismatch" - Image and description are completely unrelated
-- "missing_subjects" - People/objects mentioned in description not visible in image
-- "missing_action" - Action/incident mentioned but not visible
-- "valid_match" - Description accurately matches image
+- "missing_subjects" - Critical subjects mentioned in description not visible
+- "valid_match" - Description accurately matches image content
 - "subject_different" - Image shows different subject than described
+- "low_quality" - Image quality poor but content appears to match
 """
 
 
