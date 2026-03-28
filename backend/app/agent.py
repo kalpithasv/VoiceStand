@@ -3,7 +3,6 @@ import logging
 import urllib.request
 import urllib.parse
 from sqlalchemy.orm import Session
-import anthropic
 
 from .db import SessionLocal
 from .models import Post, Comment, User
