@@ -1,0 +1,11 @@
+{
+  "build": {
+    "root": "/backend"
+  },
+  "serverless": {
+    "function": {
+      "timeoutSeconds": 60,
+      "memory": 1024
+    }
+  }
+}
