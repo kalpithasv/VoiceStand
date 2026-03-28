@@ -189,14 +189,20 @@ UPLOAD_DIR = settings.upload_dir
 
 @app.on_event("startup")
 def on_startup() -> None:
+    """Startup handler - graceful DB initialization."""
     init_db()
-
+    
     # Create OpenClaw Agent User for autonomous posting
-    with SessionLocal() as db_session:
-        agent_email = "agent@openclaw.ai"
-        if not db_session.query(User).filter(User.email == agent_email).first():
-            db_session.add(User(email=agent_email, password_hash=hash_password("auto-agent-123")))
-            db_session.commit()
+    try:
+        with SessionLocal() as db_session:
+            agent_email = "agent@openclaw.ai"
+            if not db_session.query(User).filter(User.email == agent_email).first():
+                db_session.add(User(email=agent_email, password_hash=hash_password("auto-agent-123")))
+                db_session.commit()
+                print("✅ Agent user created")
+    except Exception as e:
+        print(f"⚠️  Agent user creation warning: {e}")
+        print("⚠️  Will be created on first use if needed")
 
     # Minimal SQLite migration for newly added validation columns.
     # (SQLAlchemy `create_all` won't add columns to an existing table.)
