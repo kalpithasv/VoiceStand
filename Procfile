@@ -1,1 +1,1 @@
-web: cd backend && python -c "print('🐍 Python loaded'); import sys; print(f'Version: {sys.version}'); from app.config import settings; print(f'DB: {settings.database_url[:50]}...'); from app.main import app; print('✅ App imported')" && python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --timeout-keep-alive 75
+web: cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --timeout-keep-alive 75 --log-level info

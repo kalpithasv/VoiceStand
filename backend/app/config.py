@@ -1,5 +1,6 @@
 from typing import List
 import os
+import sys
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -50,5 +51,14 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
-settings = Settings()
+try:
+    settings = Settings()
+    print(f"✅ Settings loaded. DB: {settings.database_url[:40]}...", file=sys.stderr)
+except Exception as e:
+    print(f"❌ Settings load error: {e}", file=sys.stderr)
+    import traceback
+    traceback.print_exc()
+    # Create minimal fallback settings
+    settings = Settings(database_url="sqlite:///./dev.db")
+    print("⚠️  Using fallback settings", file=sys.stderr)
 
