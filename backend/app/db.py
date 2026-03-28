@@ -11,16 +11,29 @@ class Base(DeclarativeBase):
 
 
 def _create_engine():
-    # For TiDB/MySQL: use SQLAlchemy's normal MySQL dialect.
-    # For local dev, sqlite URL is also supported by default settings.
-    connect_args = {}
-    if settings.database_url.startswith("sqlite"):
-        connect_args = {"check_same_thread": False}
-    else:
-        # TiDB/MySQL connection timeout
-        connect_args = {"connect_timeout": 10}
-
-    return create_engine(settings.database_url, pool_pre_ping=True, connect_args=connect_args)
+    # TiDB Cloud ONLY - Requires SSL/TLS
+    # Connection string format: mysql+pymysql://user:password@host:port/database
+    
+    import ssl
+    
+    # TiDB Cloud requires SSL/TLS - use system CA certificates
+    # PyMySQL SSL parameters
+    connect_args = {
+        "connect_timeout": 15,
+    }
+    
+    # For PyMySQL with TiDB Cloud SSL/TLS
+    # The URL can include SSL parameters via query string
+    # OR we can use connect_args with ssl options
+    
+    return create_engine(
+        settings.database_url, 
+        pool_pre_ping=True, 
+        connect_args=connect_args,
+        pool_size=10,
+        max_overflow=20,
+        echo=False
+    )
 
 
 engine = _create_engine()
