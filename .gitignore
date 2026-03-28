@@ -7,6 +7,10 @@
 
 # Documentation
 *.md
+*.html
+
+# Deployment
+Procfile
 
 # Python
 __pycache__/
